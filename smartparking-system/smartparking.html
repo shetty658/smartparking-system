@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Parking Grid</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap" rel="stylesheet">
+
+<style>
+:root{
+--dark-bg:#121212;
+--container-bg:#1e1e1e;
+--accent-blue:#00bcd4;
+--accent-green:#00ff87;
+--accent-red:#ff3d71;
+--accent-yellow:#ffaa00;
+--text-light:#e0e0e0;
+}
+
+body{
+font-family:'Orbitron',sans-serif;
+background:var(--dark-bg);
+color:var(--text-light);
+display:flex;
+justify-content:center;
+padding:20px;
+}
+
+.container{
+width:100%;
+max-width:1200px;
+background:var(--container-bg);
+padding:30px;
+border-radius:12px;
+box-shadow:0 0 25px rgba(0,188,212,0.15);
+}
+
+.controls{
+display:flex;
+gap:10px;
+flex-wrap:wrap;
+margin-bottom:15px;
+}
+
+input,button{
+padding:10px;
+border-radius:6px;
+border:none;
+font-family:'Orbitron';
+}
+
+input{
+background:#333;
+color:white;
+border:1px solid #444;
+}
+
+button{
+cursor:pointer;
+font-weight:bold;
+transition:.3s;
+}
+
+.btn-blue{background:var(--accent-blue);}
+.btn-green{background:var(--accent-green);}
+.btn-red{background:var(--accent-red);}
+
+button:hover{filter:brightness(1.2);}
+
+#messages{
+margin:15px 0;
+padding:10px;
+background:#2a2a2a;
+border-radius:6px;
+text-align:center;
+}
+
+.dashboard{
+display:grid;
+grid-template-columns:repeat(4,1fr);
+gap:15px;
+}
+
+.dash-column{
+background:#252525;
+padding:15px;
+border-radius:8px;
+min-height:250px;
+border-top:4px solid #444;
+}
+
+.col-available{border-color:var(--accent-green);}
+.col-booked{border-color:var(--accent-blue);}
+.col-cancelled{border-color:var(--accent-red);}
+.col-waiting{border-color:var(--accent-yellow);}
+
+h3{
+text-align:center;
+font-size:0.9em;
+margin-bottom:10px;
+}
+
+.list-item{
+background:#333;
+padding:10px;
+border-radius:5px;
+margin-bottom:8px;
+font-size:0.8em;
+border-left:4px solid #666;
+}
+
+.time{
+font-size:0.75em;
+color:#aaa;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+<h1>SMART PARKING GRID</h1>
+
+<div class="controls">
+<input type="number" id="numSlots" value="5" placeholder="Total Slots">
+<button class="btn-blue" onclick="createSlots()">Set System</button>
+</div>
+
+<div class="controls">
+<input type="text" id="userName" placeholder="User Name">
+<input type="text" id="vehicleNum" placeholder="Vehicle No">
+<input type="number" id="slotNum" placeholder="Slot #">
+<button class="btn-green" onclick="bookSlot()">Book</button>
+<button class="btn-red" onclick="cancelSlot()">Cancel</button>
+</div>
+
+<div id="messages">System Ready</div>
+
+<div class="dashboard">
+
+<div class="dash-column col-available">
+<h3>✅ AVAILABLE</h3>
+<div id="availableList"></div>
+</div>
+
+<div class="dash-column col-booked">
+<h3>🚗 BOOKED</h3>
+<div id="bookedList"></div>
+</div>
+
+<div class="dash-column col-cancelled">
+<h3>❌ CANCELLED</h3>
+<div id="cancelledList"></div>
+</div>
+
+<div class="dash-column col-waiting">
+<h3>⏳ WAITING QUEUE</h3>
+<div id="waitingList"></div>
+</div>
+
+</div>
+</div>
+
+<script>
+// ---------------- DATA STRUCTURES ----------------
+let slots=[];        // Linked List logic
+let waitingQueue=[]; // Queue (FIFO)
+let history=[];      // Stack (LIFO)
+
+// ---------------- DISPLAY ----------------
+function updateDisplay(){
+const avail=document.getElementById("availableList");
+const booked=document.getElementById("bookedList");
+const cancelled=document.getElementById("cancelledList");
+const waiting=document.getElementById("waitingList");
+
+avail.innerHTML=booked.innerHTML=cancelled.innerHTML=waiting.innerHTML="";
+
+slots.forEach(s=>{
+let div=document.createElement("div");
+div.className="list-item";
+if(!s.isBooked){
+div.textContent=`Slot ${s.id} : Free`;
+avail.appendChild(div);
+}else{
+div.innerHTML=`Slot ${s.id} : ${s.user}<br>${s.vehicle}
+<div class="time">Booked at ${s.time}</div>`;
+booked.appendChild(div);
+}
+});
+
+history.forEach(h=>{
+let div=document.createElement("div");
+div.className="list-item";
+div.innerHTML=`Slot ${h.id} : ${h.user}
+<div class="time">Cancelled at ${h.time}</div>`;
+cancelled.appendChild(div);
+});
+
+waitingQueue.forEach((w,i)=>{
+let div=document.createElement("div");
+div.className="list-item";
+div.innerHTML=`${i+1}. ${w.user}<br>${w.vehicle}`;
+waiting.appendChild(div);
+});
+}
+
+// ---------------- CREATE SLOTS ----------------
+function createSlots(){
+let n=parseInt(numSlots.value);
+slots=[];
+waitingQueue=[];
+history=[];
+for(let i=1;i<=n;i++){
+slots.push({id:i,isBooked:false,user:"",vehicle:"",time:""});
+}
+messages.innerHTML=`<span style="color:var(--accent-blue)">System Initialized with ${n} slots</span>`;
+updateDisplay();
+}
+
+// ---------------- BOOK SLOT ----------------
+function bookSlot(){
+let name=userName.value;
+let vehicle=vehicleNum.value;
+
+if(!name||!vehicle){
+alert("Enter all details");
+return;
+}
+
+let freeSlot=slots.find(s=>!s.isBooked);
+
+if(freeSlot){
+freeSlot.isBooked=true;
+freeSlot.user=name;
+freeSlot.vehicle=vehicle;
+freeSlot.time=new Date().toLocaleTimeString();
+
+messages.innerHTML=`<span style="color:var(--accent-green)">Slot ${freeSlot.id} booked</span>`;
+}else{
+waitingQueue.push({user:name,vehicle:vehicle});
+messages.innerHTML=`<span style="color:var(--accent-yellow)">All slots full. Added to waiting list</span>`;
+}
+updateDisplay();
+}
+
+// ---------------- CANCEL SLOT ----------------
+function cancelSlot(){
+let num=parseInt(slotNum.value);
+let slot=slots.find(s=>s.id===num);
+
+if(!slot||!slot.isBooked){
+alert("Invalid slot");
+return;
+}
+
+// push into STACK
+history.unshift({
+id:slot.id,
+user:slot.user,
+time:new Date().toLocaleTimeString()
+});
+
+// free slot
+slot.isBooked=false;
+slot.user="";
+slot.vehicle="";
+slot.time="";
+
+// assign from QUEUE
+if(waitingQueue.length>0){
+let next=waitingQueue.shift();
+slot.isBooked=true;
+slot.user=next.user;
+slot.vehicle=next.vehicle;
+slot.time=new Date().toLocaleTimeString();
+
+messages.innerHTML=`<span style="color:var(--accent-blue)">Slot reassigned to waiting user</span>`;
+}else{
+messages.innerHTML=`<span style="color:var(--accent-red)">Slot cancelled and now free</span>`;
+}
+updateDisplay();
+}
+
+window.onload=createSlots;
+</script>
+</body>
+</html> 
